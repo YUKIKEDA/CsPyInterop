@@ -1,0 +1,30 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Embeded Python
+python-3.13.1-embed-amd64/
+
+# Cython build output
+pylib/**/*.c
+pylib/**/*.pyd
+
+# build-cython.ps1 -Deploy の一時ファイル
+embed-requirements.txt
+
+# C# Build output
+CsConsoleApp/obj/
+CsConsoleApp/bin/
+
+# Solution files
+*.sln
+
+# Viual Studio
+.vs

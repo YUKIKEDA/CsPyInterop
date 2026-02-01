@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <PlatformTarget>x64</PlatformTarget>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="pythonnet" Version="3.0.5" />
+  </ItemGroup>
+
+  <!-- 組み込み Python（Embeddable Package）をビルド出力にコピー -->
+  <ItemGroup>
+    <None Include="..\pylib\python-3.13.1-embed-amd64\**\*" CopyToOutputDirectory="PreserveNewest" LinkBase="pylib/python-3.13.1-embed-amd64" />
+  </ItemGroup>
+
+</Project>
