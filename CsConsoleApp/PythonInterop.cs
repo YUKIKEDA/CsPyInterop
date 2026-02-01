@@ -8,6 +8,11 @@ namespace CsConsoleApp;
 /// pythonnet を用いて組み込み Python の pylib モジュール（linalg.decomposition 等）を利用するサンプル。
 /// 組み込み Python は pylib/python-3.13.1-embed-amd64 に配置し、ビルド出力にコピーされていることを前提とする。
 /// デバッガーで MissingMethodException / NotSupportedException が表示されても、pythonnet 内部で処理されており動作に影響しない。非表示にするには doc の「6.5 デバッガーで表示される例外」を参照。
+///
+/// 【注意: Call 間の状態共有】
+/// 全 Call は同一 Python ランタイムで実行される。linalg.decomposition は stateless で Call ごとに独立。
+/// ml.pytorch_sample はモジュールグローバル（_model）を持ち、Train → Predict で意図的に共有する。
+/// Train を複数回呼ぶと後続呼び出しが直前のモデルを上書きする。複数モデルを並行利用する場合は Python 側の設計変更が必要。
 /// </summary>
 public class PythonInterop
 {
@@ -118,6 +123,86 @@ public class PythonInterop
 
             return new SvdResult(u, s, vt);
         }
+    }
+
+    /// <summary>
+    /// pylib の ml.pytorch_sample.train_regression_sample を呼び出し、回帰モデルを訓練します。
+    /// </summary>
+    /// <param name="epochs">訓練エポック数（省略時は 200）</param>
+    /// <returns>final_loss と epochs を含む辞書の代わりに final_loss を返す（サンプル用）</returns>
+    public static double CallTrainRegressionSample(int epochs = 200)
+    {
+        if (!_initialized)
+            Initialize();
+
+        using (Py.GIL())
+        {
+            AddSitePackagesToSysPath();
+
+            PyObject mlModule = Py.Import("ml.pytorch_sample");
+            PyObject trainFn = mlModule.GetAttr("train_regression_sample");
+            PyObject resultPy = trainFn.Invoke(epochs.ToPython());
+            trainFn.Dispose();
+            mlModule.Dispose();
+
+            PyObject lossPy = resultPy.GetItem("final_loss".ToPython());
+            double loss = lossPy.As<double>();
+            lossPy.Dispose();
+            resultPy.Dispose();
+
+            return loss;
+        }
+    }
+
+    /// <summary>
+    /// pylib の ml.pytorch_sample.predict_dict を呼び出し、訓練済みモデルで予測します。
+    /// 1 サンプルは [x1, x2] の 2 特徴量。複数サンプルは行ごとに [x1,x2] の 2 次元配列で渡す。
+    /// </summary>
+    /// <param name="features">入力特徴量（1 サンプル: 長さ 2 の配列、または 2 列の 2 次元配列）</param>
+    /// <returns>各サンプルの予測値の配列</returns>
+    public static double[] CallPredictDict(double[][] features)
+    {
+        if (!_initialized)
+            Initialize();
+
+        using (Py.GIL())
+        {
+            AddSitePackagesToSysPath();
+
+            PyObject mlModule = Py.Import("ml.pytorch_sample");
+            PyObject predictFn = mlModule.GetAttr("predict_dict");
+            using PyList featuresPy = CreatePyMatrix(features);
+            PyObject resultPy = predictFn.Invoke(featuresPy);
+            predictFn.Dispose();
+            mlModule.Dispose();
+
+            PyObject resultListPy = resultPy.GetItem("result".ToPython());
+            double[] result = resultListPy.As<double[]>();
+            resultListPy.Dispose();
+            resultPy.Dispose();
+
+            return result;
+        }
+    }
+
+    /// <summary>
+    /// 1 サンプル [x1, x2] で予測するオーバーロード。
+    /// </summary>
+    public static double CallPredictDict(double x1, double x2)
+    {
+        double[] preds = CallPredictDict(new[] { new[] { x1, x2 } });
+        return preds[0];
+    }
+
+    /// <summary>
+    /// 1次元 C# 配列を Python の list に変換する。
+    /// </summary>
+    private static PyList CreatePyList(double[] values)
+    {
+        var list = new PyList();
+        foreach (double x in values)
+            list.Append(x.ToPython());
+        return list;
     }
 
     /// <summary>
